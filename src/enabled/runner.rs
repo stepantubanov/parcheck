@@ -1,15 +1,8 @@
 use core::fmt;
-use std::{
-    env,
-    future::Future,
-    num::ParseIntError,
-    panic::{self, AssertUnwindSafe},
-    str::FromStr,
-};
+use std::{env, future::Future, num::ParseIntError, str::FromStr};
 
 use fastrand::Rng;
 use futures_util::join;
-use futures_util::FutureExt;
 
 use crate::enabled::{
     controller::Controller,
@@ -103,14 +96,7 @@ impl Runner {
                     }
                 };
 
-                let result = AssertUnwindSafe(async {
-                    (state, _) = join!(f(state), control);
-                    state
-                })
-                .catch_unwind()
-                .await;
-
-                state = unwrap_or_print_trace(&trace, result);
+                (state, _) = join!(f(state), control);
                 return state;
             }
             Config::Iterate(config) => config,
@@ -138,14 +124,8 @@ impl Runner {
                 }
             };
 
-            let result = AssertUnwindSafe(async {
-                (state, _) = join!(f(state), control);
-                state
-            })
-            .catch_unwind()
-            .await;
+            (state, _) = join!(f(state), control);
 
-            state = unwrap_or_print_trace(&trace, result);
             iter += 1;
         }
         state
@@ -191,12 +171,10 @@ impl FromStr for Trace {
     }
 }
 
-fn unwrap_or_print_trace<T>(trace: &Trace, result: std::thread::Result<T>) -> T {
-    match result {
-        Ok(v) => v,
-        Err(error) => {
-            eprintln!("Use PARCHECK_REPLAY=\"{trace}\" to replay the same schedule");
-            panic::resume_unwind(error);
+impl Drop for Trace {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            eprintln!("Use PARCHECK_REPLAY=\"{self}\" to replay the same schedule");
         }
     }
 }
