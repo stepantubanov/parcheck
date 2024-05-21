@@ -1,0 +1,11 @@
+[package]
+name = "parcheck"
+version = "0.1.0-alpha.1"
+edition = "2021"
+
+[dependencies]
+fastrand = "2.1"
+tokio = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
