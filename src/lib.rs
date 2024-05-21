@@ -20,3 +20,17 @@ pub use api::task::task;
 
 #[cfg(feature = "enable")]
 pub use enabled::runner::runner;
+
+#[cfg(feature = "enable")]
+#[macro_export]
+macro_rules! cfg_if {
+    ($code:block) => {
+        $code
+    };
+}
+
+#[cfg(not(feature = "enable"))]
+#[macro_export]
+macro_rules! cfg_if {
+    ($code:block) => {};
+}
