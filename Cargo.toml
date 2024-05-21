@@ -2,7 +2,12 @@
 name = "parcheck"
 version = "0.1.0-alpha.1"
 edition = "2021"
+license = "MIT"
+authors = ["Stepan Tubanov"]
 description = "Test permutations of concurrent scenarios"
+repository = "https://github.com/stepantubanov/parcheck"
+keywords = ["async", "testing"]
+categories = ["concurrency", "testing"]
 
 [dependencies]
 fastrand = { version = "2.1", optional = true }
