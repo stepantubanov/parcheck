@@ -7,7 +7,7 @@ authors = ["Stepan Tubanov"]
 description = "Test permutations of concurrent scenarios"
 repository = "https://github.com/stepantubanov/parcheck"
 keywords = ["async", "testing"]
-categories = ["concurrency", "testing"]
+categories = ["concurrency", "development-tools::testing"]
 
 [dependencies]
 fastrand = { version = "2.1", optional = true }
