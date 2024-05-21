@@ -1,8 +1,14 @@
 use core::fmt;
-use std::{env, future::Future, num::ParseIntError, str::FromStr};
+use std::{
+    env,
+    future::Future,
+    num::ParseIntError,
+    panic::{self, AssertUnwindSafe},
+    str::FromStr,
+};
 
 use fastrand::Rng;
-use futures_util::join;
+use futures_util::{join, FutureExt};
 
 use crate::enabled::{
     controller::Controller,
@@ -25,7 +31,10 @@ enum Config {
 
 struct IterateConfig {
     max_iterations: u64,
+    on_panic: Option<PanicHandler>,
 }
+
+pub type PanicHandler = Box<dyn FnOnce(&Trace)>;
 
 impl Runner {
     pub fn from_env() -> Self {
@@ -38,6 +47,7 @@ impl Runner {
 
         let mut config = IterateConfig {
             max_iterations: u64::MAX,
+            on_panic: None,
         };
         if let Ok(max_iterations) = env::var("PARCHECK_MAX_ITERATIONS") {
             config.max_iterations = max_iterations
@@ -51,8 +61,23 @@ impl Runner {
 
     pub fn max_iterations(self, max_iterations: u64) -> Self {
         match self.config {
-            Config::Iterate(_) => Self {
-                config: Config::Iterate(IterateConfig { max_iterations }),
+            Config::Iterate(config) => Self {
+                config: Config::Iterate(IterateConfig {
+                    max_iterations,
+                    ..config
+                }),
+            },
+            Config::Replay { .. } => self,
+        }
+    }
+
+    pub fn on_panic(self, on_panic: PanicHandler) -> Self {
+        match self.config {
+            Config::Iterate(config) => Self {
+                config: Config::Iterate(IterateConfig {
+                    on_panic: Some(on_panic),
+                    ..config
+                }),
             },
             Config::Replay { .. } => self,
         }
@@ -124,7 +149,26 @@ impl Runner {
                 }
             };
 
-            (state, _) = join!(f(state), control);
+            let result = AssertUnwindSafe(async {
+                (state, _) = join!(f(state), control);
+                state
+            })
+            .catch_unwind()
+            .await;
+
+            state = match result {
+                Ok(v) => v,
+                Err(error) => {
+                    if let Some(on_panic) = config.on_panic {
+                        on_panic(&trace);
+                    } else {
+                        eprintln!(
+                            "note: use `PARCHECK_REPLAY=\"{trace}\"` to replay the same schedule"
+                        );
+                    }
+                    panic::resume_unwind(error);
+                }
+            };
 
             iter += 1;
         }
@@ -132,7 +176,7 @@ impl Runner {
     }
 }
 
-struct Trace {
+pub struct Trace {
     task_ids: Vec<TaskId>,
 }
 
@@ -168,13 +212,5 @@ impl FromStr for Trace {
                 .map(|part| part.parse().map(TaskId))
                 .collect::<Result<Vec<_>, _>>()?,
         })
-    }
-}
-
-impl Drop for Trace {
-    fn drop(&mut self) {
-        if std::thread::panicking() {
-            eprintln!("Use PARCHECK_REPLAY=\"{self}\" to replay the same schedule");
-        }
     }
 }
