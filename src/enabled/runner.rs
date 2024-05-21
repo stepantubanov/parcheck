@@ -8,8 +8,8 @@ use std::{
 };
 
 use fastrand::Rng;
+use futures_util::join;
 use futures_util::FutureExt;
-use tokio::join;
 
 use crate::enabled::{
     controller::Controller,
@@ -184,7 +184,7 @@ impl FromStr for Trace {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self {
             task_ids: s
-                .split(",")
+                .split(',')
                 .map(|part| part.parse().map(TaskId))
                 .collect::<Result<Vec<_>, _>>()?,
         })
