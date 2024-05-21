@@ -2,7 +2,7 @@ use std::{env, future::Future};
 
 use fastrand::Rng;
 
-use crate::{controller::Controller, schedule_tree::ScheduleTree, task::TaskName};
+use crate::enabled::{controller::Controller, schedule_tree::ScheduleTree, task::TaskName};
 
 pub fn runner() -> Runner {
     Runner::from_env()
@@ -32,10 +32,7 @@ impl Runner {
     }
 
     pub fn max_iterations(self, max_iterations: u64) -> Self {
-        Self {
-            max_iterations,
-            ..self
-        }
+        Self { max_iterations }
     }
 
     pub async fn run<'a, I, F, Fut>(self, initial_tasks: I, mut f: F)
@@ -66,8 +63,9 @@ impl Runner {
             .collect();
 
         let mut schedule_tree = ScheduleTree::new(&initial_tasks);
+        let mut iter = 0;
 
-        while schedule_tree.has_unfinished_paths() {
+        while schedule_tree.has_unfinished_paths() && iter < self.max_iterations {
             let mut controller = Controller::register(&initial_tasks);
 
             let task = tokio::spawn(async move {
@@ -88,6 +86,7 @@ impl Runner {
 
             state = f(state).await;
             schedule_tree = task.await.unwrap();
+            iter += 1;
         }
         state
     }

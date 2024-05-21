@@ -1,9 +1,22 @@
-mod controller;
-mod operation;
-mod runner;
-mod schedule_tree;
-mod task;
+#[cfg(feature = "enable")]
+mod enabled;
+#[cfg(feature = "enable")]
+use enabled as api;
 
-pub use operation::{operation, operation_with_lock, Lock};
-pub use runner::runner;
-pub use task::task;
+#[cfg(not(feature = "enable"))]
+mod disabled;
+#[cfg(not(feature = "enable"))]
+use disabled as api;
+
+#[derive(Clone, Debug)]
+pub enum Lock {
+    AcquireShared { scope: String },
+    AcquireExclusive { scope: String },
+    Release { scope: String },
+}
+
+pub use api::operation::{operation, operation_with_lock};
+pub use api::task::task;
+
+#[cfg(feature = "enable")]
+pub use enabled::runner::runner;

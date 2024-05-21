@@ -1,7 +1,7 @@
 use fastrand::Rng;
 use std::ops::Range;
 
-use crate::{
+use crate::enabled::{
     controller::TaskState,
     task::{Task, TaskId, TaskName},
 };
@@ -16,6 +16,8 @@ pub(crate) struct ScheduleTree {
 pub(crate) struct NodeId(usize);
 
 struct Node {
+    // TODO: spawn tasks
+    #[allow(dead_code)]
     task_name: TaskName,
     state: NodeState,
 }
@@ -141,10 +143,10 @@ impl<'a> PathCursor<'a> {
         } else {
             assert_eq!(tasks.len(), self.tree.roots);
 
-            for i in 0..tasks.len() {
+            for (i, (_, task_state)) in tasks.iter().enumerate() {
                 let state = &mut self.tree.nodes[i].state;
                 if matches!(state, NodeState::Unvisited) {
-                    *state = task_state_to_node_state(&tasks[i].1);
+                    *state = task_state_to_node_state(task_state);
                 }
             }
 

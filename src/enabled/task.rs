@@ -6,7 +6,7 @@ use std::{
 
 use tokio::sync::{mpsc, oneshot};
 
-use crate::operation::Lock;
+use crate::Lock;
 
 pub async fn task<F: Future>(name: &str, f: F) -> F::Output {
     if let Some(task) = Task::pop_expected_task(name) {
@@ -94,9 +94,7 @@ impl Task {
 
     fn pop_expected_task(name: &str) -> Option<Task> {
         let mut expected = EXPECTED_TASKS.lock().unwrap();
-        let Some(idx) = expected.iter().position(|task| task.inner.name.0 == name) else {
-            return None;
-        };
+        let idx = expected.iter().position(|task| task.inner.name.0 == name)?;
         Some(expected.swap_remove(idx))
     }
 }

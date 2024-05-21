@@ -3,13 +3,15 @@ use std::{collections::HashMap, mem::replace};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
-    task::{Task, TaskEvent, TaskId, TaskName},
+    enabled::task::{Task, TaskEvent, TaskId, TaskName},
     Lock,
 };
 
 pub(crate) struct Controller {
     tasks: Vec<(Task, TaskState)>,
     locked_state: LockedState,
+    // TODO: spawn tasks
+    #[allow(dead_code)]
     events_tx: mpsc::Sender<(TaskId, TaskEvent)>,
     events_rx: mpsc::Receiver<(TaskId, TaskEvent)>,
 }
@@ -165,7 +167,7 @@ impl LockedState {
         blockers
     }
 
-    fn acquire_locks(&mut self, task_id: TaskId, locks: &[Lock]) -> () {
+    fn acquire_locks(&mut self, task_id: TaskId, locks: &[Lock]) {
         for lock in locks {
             let (scope, mode) = match lock {
                 Lock::AcquireShared { scope } => (scope, Mode::Shared),

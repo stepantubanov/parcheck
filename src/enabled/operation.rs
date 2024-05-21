@@ -2,7 +2,10 @@ use std::future::Future;
 
 use tokio::sync::oneshot;
 
-use crate::task::{self, Task};
+use crate::{
+    enabled::task::{self, Task},
+    Lock,
+};
 
 pub async fn operation<F: Future>(f: F) -> F::Output {
     let Some(task) = task::current() else {
@@ -15,13 +18,6 @@ pub async fn operation<F: Future>(f: F) -> F::Output {
 
     task.send_event(task::TaskEvent::OperationFinished).await;
     value
-}
-
-#[derive(Clone, Debug)]
-pub enum Lock {
-    AcquireShared { scope: String },
-    AcquireExclusive { scope: String },
-    Release { scope: String },
 }
 
 pub async fn operation_with_lock<F: Future>(lock: Lock, f: F) -> F::Output {
