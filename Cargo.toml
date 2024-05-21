@@ -2,6 +2,7 @@
 name = "parcheck"
 version = "0.1.0-alpha.1"
 edition = "2021"
+description = "Test permutations of concurrent scenarios"
 
 [dependencies]
 fastrand = { version = "2.1", optional = true }
