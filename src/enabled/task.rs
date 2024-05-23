@@ -6,7 +6,7 @@ use std::{
 
 use tokio::sync::{mpsc, oneshot};
 
-use crate::ParcheckLock;
+use crate::{enabled::operation::OperationMetadata, ParcheckLock};
 
 pub async fn task<F: Future>(name: &str, f: F) -> F::Output {
     if let Some(task) = Task::pop_expected_task(name) {
@@ -42,6 +42,7 @@ pub(crate) struct Task {
 pub(crate) enum TaskEvent {
     TaskStarted,
     OperationPermitRequested {
+        metadata: &'static OperationMetadata,
         permit: oneshot::Sender<OperationPermit>,
         locks: Vec<ParcheckLock>,
     },
@@ -52,7 +53,7 @@ pub(crate) enum TaskEvent {
 #[derive(Debug)]
 pub(crate) enum OperationPermit {
     Granted,
-    OperationAlreadyInProgress,
+    OperationAlreadyInProgress { other: &'static OperationMetadata },
 }
 
 struct TaskInner {

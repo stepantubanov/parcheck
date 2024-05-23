@@ -15,6 +15,8 @@ pub(crate) mod operation {
     pub async fn operation<F: Future>(_locks: Vec<ParcheckLock>, f: F) -> F::Output {
         f.await
     }
+
+    pub struct OperationMetadata;
 }
 
 #[macro_export]

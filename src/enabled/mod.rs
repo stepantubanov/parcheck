@@ -21,9 +21,21 @@ macro_rules! task {
 #[macro_export]
 macro_rules! operation {
     ([$($lock:expr),+], { $fut:expr }) => {
-        $crate::private::operation(vec![$($lock),+], $fut)
+        {
+            static METADATA: $crate::private::OperationMetadata = $crate::private::OperationMetadata {
+                file: file!(),
+                line: line!(),
+            };
+            $crate::private::operation(&METADATA, vec![$($lock),+], $fut)
+        }
     };
     ({$fut:expr}) => {
-        $crate::private::operation(Vec::new(), $fut)
+        {
+            static METADATA: $crate::private::OperationMetadata = $crate::private::OperationMetadata {
+                file: file!(),
+                line: line!(),
+            };
+            $crate::private::operation(&METADATA, Vec::new(), $fut)
+        }
     };
 }

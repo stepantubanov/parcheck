@@ -129,7 +129,9 @@ async fn does_not_double_panic() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "operation already in progress for task 'reentrant'")]
+#[should_panic(
+    expected = "operation already in progress for task 'reentrant' (operation at tests/examples/basic.rs:139"
+)]
 async fn detects_reentrant_task() {
     parcheck::runner()
         .run(["reentrant"], || async move {

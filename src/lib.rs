@@ -10,7 +10,7 @@ use disabled as api;
 
 #[doc(hidden)]
 pub mod private {
-    pub use super::api::operation::operation;
+    pub use super::api::operation::{operation, OperationMetadata};
 }
 
 pub use api::task::task;

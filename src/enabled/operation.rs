@@ -8,21 +8,38 @@ use crate::{
 };
 
 #[doc(hidden)]
-pub async fn operation<F: Future>(locks: Vec<ParcheckLock>, f: F) -> F::Output {
+#[derive(Debug)]
+pub struct OperationMetadata {
+    pub file: &'static str,
+    pub line: u32,
+}
+
+#[doc(hidden)]
+pub async fn operation<F: Future>(
+    metadata: &'static OperationMetadata,
+    locks: Vec<ParcheckLock>,
+    f: F,
+) -> F::Output {
     let Some(task) = task::current() else {
         return f.await;
     };
 
     let (permit_tx, permit_rx) = oneshot::channel();
     task.send_event(task::TaskEvent::OperationPermitRequested {
+        metadata,
         permit: permit_tx,
         locks,
     })
     .await;
     match permit_rx.await.unwrap_or(OperationPermit::Granted) {
         OperationPermit::Granted => {}
-        OperationPermit::OperationAlreadyInProgress => {
-            panic!("operation already in progress for task '{}'", task.name().0)
+        OperationPermit::OperationAlreadyInProgress { other } => {
+            panic!(
+                "operation already in progress for task '{}' (operation at {}:{})",
+                task.name().0,
+                other.file,
+                other.line
+            )
         }
     }
 
@@ -31,8 +48,12 @@ pub async fn operation<F: Future>(locks: Vec<ParcheckLock>, f: F) -> F::Output {
     #[cfg(feature = "tracing")]
     let value = {
         use tracing::instrument::Instrument;
-        f.instrument(tracing::info_span!("parcheck.operation"))
-            .await
+        f.instrument(tracing::info_span!(
+            "parcheck.operation",
+            "operation.file" = metadata.file,
+            "operation.line" = metadata.line
+        ))
+        .await
     };
 
     task.send_event(task::TaskEvent::OperationFinished).await;

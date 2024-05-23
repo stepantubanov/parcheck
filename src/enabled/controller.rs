@@ -3,7 +3,10 @@ use std::{collections::HashMap, mem::replace};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
-    enabled::task::{OperationPermit, Task, TaskEvent, TaskId, TaskName},
+    enabled::{
+        operation::OperationMetadata,
+        task::{OperationPermit, Task, TaskEvent, TaskId, TaskName},
+    },
     ParcheckLock,
 };
 
@@ -21,12 +24,16 @@ pub(crate) enum TaskState {
     DidNotStart,
     OutsideOperation,
     WaitingForPermit {
+        metadata: &'static OperationMetadata,
         permit: oneshot::Sender<OperationPermit>,
         locks: Vec<ParcheckLock>,
         blocked_locks: Vec<ParcheckLock>,
     },
-    InsideOperation,
+    InsideOperation {
+        metadata: &'static OperationMetadata,
+    },
     Finished,
+    Invalid,
 }
 
 impl Controller {
@@ -82,8 +89,9 @@ impl Controller {
     pub(crate) async fn step_forward(&mut self, id: TaskId) {
         let (_, state) = &mut self.tasks[id.0];
 
-        let prev = replace(state, TaskState::InsideOperation);
+        let prev = replace(state, TaskState::Invalid);
         let TaskState::WaitingForPermit {
+            metadata,
             permit,
             locks,
             blocked_locks,
@@ -91,6 +99,7 @@ impl Controller {
         else {
             panic!("step_forward: task not waiting: {prev:?}");
         };
+        *state = TaskState::InsideOperation { metadata };
 
         assert!(
             blocked_locks.is_empty(),
@@ -101,7 +110,7 @@ impl Controller {
         // ignore error (channel closed)
         let _ = permit.send(OperationPermit::Granted);
 
-        while matches!(self.tasks[id.0], (_, TaskState::InsideOperation)) {
+        while matches!(self.tasks[id.0], (_, TaskState::InsideOperation { .. })) {
             self.recv_event().await;
         }
 
@@ -114,20 +123,26 @@ impl Controller {
         let (_, state) = &mut self.tasks[id.0];
         *state = match event {
             TaskEvent::TaskStarted => TaskState::OutsideOperation,
-            TaskEvent::OperationPermitRequested { permit, locks } => {
-                if let TaskState::InsideOperation = state {
-                    let _ = permit.send(super::task::OperationPermit::OperationAlreadyInProgress);
+            TaskEvent::OperationPermitRequested {
+                metadata,
+                permit,
+                locks,
+            } => {
+                if let TaskState::InsideOperation { metadata: other } = state {
+                    let _ = permit
+                        .send(super::task::OperationPermit::OperationAlreadyInProgress { other });
                     return;
                 };
 
                 TaskState::WaitingForPermit {
+                    metadata,
                     permit,
                     blocked_locks: Vec::new(),
                     locks,
                 }
             }
             TaskEvent::OperationFinished => {
-                let TaskState::InsideOperation = state else {
+                let TaskState::InsideOperation { .. } = state else {
                     panic!("received OperationFinished when not inside operation");
                 };
 

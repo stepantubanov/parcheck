@@ -199,9 +199,10 @@ fn task_state_to_node_state(task_state: &TaskState) -> NodeState {
         TaskState::WaitingForPermit { .. } => NodeState::Unreachable {
             reason: "blocked by locks",
         },
-        TaskState::InsideOperation => unreachable!(),
+        TaskState::InsideOperation { .. } => unreachable!(),
         TaskState::Finished => NodeState::Unreachable {
             reason: "task finished",
         },
+        TaskState::Invalid => unreachable!(),
     }
 }
