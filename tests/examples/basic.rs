@@ -17,16 +17,16 @@ impl Observer {
     }
 
     async fn execute(&self, process: &str) {
-        parcheck::task(&format!("execute:{process}"), async {
-            parcheck::operation(async {
+        parcheck::task!(format!("execute:{process}"), async {
+            parcheck::operation!(async {
                 self.append(process);
             })
             .await;
-            parcheck::operation(async {
+            parcheck::operation!(async {
                 self.append(process);
             })
             .await;
-            parcheck::operation(async {
+            parcheck::operation!(async {
                 self.append(process);
             })
             .await;

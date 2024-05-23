@@ -4,7 +4,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     enabled::task::{Task, TaskEvent, TaskId, TaskName},
-    Lock,
+    ParcheckLock,
 };
 
 pub(crate) struct Controller {
@@ -22,8 +22,8 @@ pub(crate) enum TaskState {
     OutsideOperation,
     WaitingForPermit {
         permit: oneshot::Sender<()>,
-        locks: Vec<Lock>,
-        blocked_locks: Vec<Lock>,
+        locks: Vec<ParcheckLock>,
+        blocked_locks: Vec<ParcheckLock>,
     },
     InsideOperation,
     Finished,
@@ -149,13 +149,13 @@ impl LockedState {
         }
     }
 
-    fn blocked(&self, task_id: TaskId, locks: &[Lock]) -> Vec<Lock> {
+    fn blocked(&self, task_id: TaskId, locks: &[ParcheckLock]) -> Vec<ParcheckLock> {
         let mut blockers = Vec::new();
         for lock in locks {
             let (scope, mode) = match lock {
-                Lock::AcquireShared { scope } => (scope, Mode::Shared),
-                Lock::AcquireExclusive { scope } => (scope, Mode::Exclusive),
-                Lock::Release { .. } => continue,
+                ParcheckLock::AcquireShared { scope } => (scope, Mode::Shared),
+                ParcheckLock::AcquireExclusive { scope } => (scope, Mode::Exclusive),
+                ParcheckLock::Release { .. } => continue,
             };
             if let Some(holders) = self.scopes.get(scope) {
                 if has_conflict(task_id, mode, holders) {
@@ -167,12 +167,12 @@ impl LockedState {
         blockers
     }
 
-    fn acquire_locks(&mut self, task_id: TaskId, locks: &[Lock]) {
+    fn acquire_locks(&mut self, task_id: TaskId, locks: &[ParcheckLock]) {
         for lock in locks {
             let (scope, mode) = match lock {
-                Lock::AcquireShared { scope } => (scope, Mode::Shared),
-                Lock::AcquireExclusive { scope } => (scope, Mode::Exclusive),
-                Lock::Release { .. } => continue,
+                ParcheckLock::AcquireShared { scope } => (scope, Mode::Shared),
+                ParcheckLock::AcquireExclusive { scope } => (scope, Mode::Exclusive),
+                ParcheckLock::Release { .. } => continue,
             };
 
             let holders = self.scopes.entry(scope.clone()).or_default();
@@ -193,11 +193,13 @@ impl LockedState {
         }
     }
 
-    fn release_locks(&mut self, task_id: TaskId, locks: &[Lock]) {
+    fn release_locks(&mut self, task_id: TaskId, locks: &[ParcheckLock]) {
         for lock in locks {
             let scope = match lock {
-                Lock::AcquireShared { .. } | Lock::AcquireExclusive { .. } => continue,
-                Lock::Release { scope } => scope,
+                ParcheckLock::AcquireShared { .. } | ParcheckLock::AcquireExclusive { .. } => {
+                    continue
+                }
+                ParcheckLock::Release { scope } => scope,
             };
 
             let Some(holders) = self.scopes.get_mut(scope) else {
