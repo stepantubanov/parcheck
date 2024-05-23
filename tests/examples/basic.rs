@@ -121,3 +121,19 @@ async fn does_not_double_panic() {
         })
         .await;
 }
+
+#[tokio::test]
+#[should_panic(expected = "operation already in progress for task 'reentrant'")]
+async fn detects_reentrant_task() {
+    parcheck::runner()
+        .run(["reentrant"], || async move {
+            parcheck::task("reentrant", async {
+                parcheck::operation!(async {
+                    parcheck::operation!(async {}).await;
+                })
+                .await;
+            })
+            .await;
+        })
+        .await;
+}

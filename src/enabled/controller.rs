@@ -3,7 +3,7 @@ use std::{collections::HashMap, mem::replace};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
-    enabled::task::{Task, TaskEvent, TaskId, TaskName},
+    enabled::task::{OperationPermit, Task, TaskEvent, TaskId, TaskName},
     ParcheckLock,
 };
 
@@ -21,7 +21,7 @@ pub(crate) enum TaskState {
     DidNotStart,
     OutsideOperation,
     WaitingForPermit {
-        permit: oneshot::Sender<()>,
+        permit: oneshot::Sender<OperationPermit>,
         locks: Vec<ParcheckLock>,
         blocked_locks: Vec<ParcheckLock>,
     },
@@ -99,7 +99,7 @@ impl Controller {
         self.locked_state.acquire_locks(id, &locks);
 
         // ignore error (channel closed)
-        let _ = permit.send(());
+        let _ = permit.send(OperationPermit::Granted);
 
         while matches!(self.tasks[id.0], (_, TaskState::InsideOperation)) {
             self.recv_event().await;
@@ -114,11 +114,18 @@ impl Controller {
         let (_, state) = &mut self.tasks[id.0];
         *state = match event {
             TaskEvent::TaskStarted => TaskState::OutsideOperation,
-            TaskEvent::OperationPermitRequested { permit, locks } => TaskState::WaitingForPermit {
-                permit,
-                blocked_locks: Vec::new(),
-                locks,
-            },
+            TaskEvent::OperationPermitRequested { permit, locks } => {
+                if let TaskState::InsideOperation = state {
+                    let _ = permit.send(super::task::OperationPermit::OperationAlreadyInProgress);
+                    return;
+                };
+
+                TaskState::WaitingForPermit {
+                    permit,
+                    blocked_locks: Vec::new(),
+                    locks,
+                }
+            }
             TaskEvent::OperationFinished => {
                 let TaskState::InsideOperation = state else {
                     panic!("received OperationFinished when not inside operation");

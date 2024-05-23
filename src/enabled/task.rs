@@ -42,11 +42,17 @@ pub(crate) struct Task {
 pub(crate) enum TaskEvent {
     TaskStarted,
     OperationPermitRequested {
-        permit: oneshot::Sender<()>,
+        permit: oneshot::Sender<OperationPermit>,
         locks: Vec<ParcheckLock>,
     },
     OperationFinished,
     TaskFinished,
+}
+
+#[derive(Debug)]
+pub(crate) enum OperationPermit {
+    Granted,
+    OperationAlreadyInProgress,
 }
 
 struct TaskInner {

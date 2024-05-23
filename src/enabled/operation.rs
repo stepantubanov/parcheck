@@ -2,7 +2,10 @@ use std::future::Future;
 
 use tokio::sync::oneshot;
 
-use crate::{enabled::task, ParcheckLock};
+use crate::{
+    enabled::task::{self, OperationPermit},
+    ParcheckLock,
+};
 
 pub async fn operation<F: Future>(locks: Vec<ParcheckLock>, f: F) -> F::Output {
     let Some(task) = task::current() else {
@@ -15,7 +18,12 @@ pub async fn operation<F: Future>(locks: Vec<ParcheckLock>, f: F) -> F::Output {
         locks,
     })
     .await;
-    let _ = permit_rx.await;
+    match permit_rx.await.unwrap_or(OperationPermit::Granted) {
+        OperationPermit::Granted => {}
+        OperationPermit::OperationAlreadyInProgress => {
+            panic!("operation already in progress for task '{}'", task.name().0)
+        }
+    }
 
     let value = f.await;
 
