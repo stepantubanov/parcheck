@@ -20,10 +20,10 @@ macro_rules! task {
 
 #[macro_export]
 macro_rules! operation {
-    ([$($lock:expr),+], $fut:expr) => {
+    ([$($lock:expr),+], { $fut:expr }) => {
         $crate::private::operation(vec![$($lock),+], $fut)
     };
-    ($fut:expr) => {
+    ({$fut:expr}) => {
         $crate::private::operation(Vec::new(), $fut)
     };
 }

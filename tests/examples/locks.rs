@@ -6,23 +6,26 @@ static LOCK: AtomicBool = AtomicBool::new(false);
 
 async fn execute(process: &str) {
     parcheck::task(&format!("locks:{process}"), async {
-        parcheck::operation!(
-            [ParcheckLock::AcquireExclusive { scope: "".into() }],
+        parcheck::operation!([ParcheckLock::AcquireExclusive { scope: "".into() }], {
             async {
                 LOCK.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
                     .expect("already locked, shouldn't execute this schedule");
             }
-        )
-        .await;
-
-        parcheck::operation!(async {
-            assert!(LOCK.load(Ordering::Relaxed), "should be locked");
         })
         .await;
 
-        parcheck::operation!([ParcheckLock::Release { scope: "".into() }], async {
-            LOCK.compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
-                .expect("already unlocked, shouldn't be possible");
+        parcheck::operation!({
+            async {
+                assert!(LOCK.load(Ordering::Relaxed), "should be locked");
+            }
+        })
+        .await;
+
+        parcheck::operation!([ParcheckLock::Release { scope: "".into() }], {
+            async {
+                LOCK.compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
+                    .expect("already unlocked, shouldn't be possible");
+            }
         })
         .await;
     })

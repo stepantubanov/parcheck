@@ -18,16 +18,22 @@ impl Observer {
 
     async fn execute(&self, process: &str) {
         parcheck::task!(format!("execute:{process}"), async {
-            parcheck::operation!(async {
-                self.append(process);
+            parcheck::operation!({
+                async {
+                    self.append(process);
+                }
             })
             .await;
-            parcheck::operation!(async {
-                self.append(process);
+            parcheck::operation!({
+                async {
+                    self.append(process);
+                }
             })
             .await;
-            parcheck::operation!(async {
-                self.append(process);
+            parcheck::operation!({
+                async {
+                    self.append(process);
+                }
             })
             .await;
         })
@@ -128,8 +134,10 @@ async fn detects_reentrant_task() {
     parcheck::runner()
         .run(["reentrant"], || async move {
             parcheck::task("reentrant", async {
-                parcheck::operation!(async {
-                    parcheck::operation!(async {}).await;
+                parcheck::operation!({
+                    async {
+                        parcheck::operation!({ async {} }).await;
+                    }
                 })
                 .await;
             })

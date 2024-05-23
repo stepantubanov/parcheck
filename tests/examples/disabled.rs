@@ -2,10 +2,16 @@ use parcheck::ParcheckLock;
 
 #[tokio::test]
 async fn works_when_disabled() {
-    let result = parcheck::task!("task", async { parcheck::operation!(async { 123 }).await }).await;
+    let result = parcheck::task!("task", async {
+        parcheck::operation!({ async { 123 } }).await
+    })
+    .await;
     assert_eq!(result, 123);
 
-    let result = parcheck::task("task", async { parcheck::operation!(async { 123 }).await }).await;
+    let result = parcheck::task("task", async {
+        parcheck::operation!({ async { 123 } }).await
+    })
+    .await;
     assert_eq!(result, 123);
 }
 
@@ -17,7 +23,7 @@ async fn doesnt_complain_about_unused_vars() {
             [ParcheckLock::AcquireExclusive {
                 scope: "scope".into()
             }],
-            async { 123 }
+            { async { 123 } }
         )
         .await
     })
@@ -29,7 +35,7 @@ async fn doesnt_complain_about_unused_vars() {
             [ParcheckLock::AcquireExclusive {
                 scope: "scope".into()
             }],
-            async { 123 }
+            { async { 123 } }
         )
         .await
     })
