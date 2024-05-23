@@ -18,30 +18,12 @@ macro_rules! task {
     };
 }
 
-#[cfg(not(feature = "tracing"))]
 #[macro_export]
 macro_rules! operation {
     ([$($lock:expr),+], $fut:expr) => {
-        $crate::operation(vec![$($lock),+], $fut)
+        $crate::private::operation(vec![$($lock),+], $fut)
     };
     ($fut:expr) => {
-        $crate::operation(Vec::new(), $fut)
-    };
-}
-
-#[cfg(feature = "tracing")]
-#[macro_export]
-macro_rules! operation {
-    ([$($lock:expr),+], $fut:expr) => {
-        {
-            use tracing::instrument::Instrument as _;
-            $crate::operation(vec![$($lock),+], $fut).instrument(tracing::info_span!("parcheck.operation"))
-        }
-    };
-    ($fut:expr) => {
-        {
-            use tracing::instrument::Instrument as _;
-            $crate::operation(Vec::new(), $fut).instrument(tracing::info_span!("parcheck.operation"))
-        }
+        $crate::private::operation(Vec::new(), $fut)
     };
 }

@@ -7,6 +7,7 @@ use crate::{
     ParcheckLock,
 };
 
+#[doc(hidden)]
 pub async fn operation<F: Future>(locks: Vec<ParcheckLock>, f: F) -> F::Output {
     let Some(task) = task::current() else {
         return f.await;
@@ -25,7 +26,14 @@ pub async fn operation<F: Future>(locks: Vec<ParcheckLock>, f: F) -> F::Output {
         }
     }
 
+    #[cfg(not(feature = "tracing"))]
     let value = f.await;
+    #[cfg(feature = "tracing")]
+    let value = {
+        use tracing::instrument::Instrument;
+        f.instrument(tracing::info_span!("parcheck.operation"))
+            .await
+    };
 
     task.send_event(task::TaskEvent::OperationFinished).await;
     value

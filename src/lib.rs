@@ -8,7 +8,12 @@ mod disabled;
 #[cfg(not(feature = "enable"))]
 use disabled as api;
 
-pub use api::{operation::operation, task::task};
+#[doc(hidden)]
+pub mod private {
+    pub use super::api::operation::operation;
+}
+
+pub use api::task::task;
 
 #[cfg(feature = "enable")]
 pub use enabled::runner::runner;
