@@ -1,0 +1,66 @@
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  RUSTDOCFLAGS: -D warnings
+  RUSTFLAGS: -D warnings
+  RUSTUP_MAX_RETRIES: 10
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: cargo test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: taiki-e/checkout-action@v1
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+
+      - name: Run tests
+        run: cargo +nightly hack test --feature-powerset --all-targets
+
+  clippy:
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: taiki-e/checkout-action@v1
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+      - name: Run clippy
+        run: cargo +nightly hack clippy --feature-powerset --all-targets
+
+  fmt:
+    name: cargo fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: taiki-e/checkout-action@v1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Run fmt
+        run: cargo fmt --all -- --check
