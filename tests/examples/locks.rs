@@ -44,3 +44,25 @@ async fn respects_locks() {
         })
         .await;
 }
+
+#[tokio::test]
+#[should_panic(
+    expected = "task 'unreleased_locks': finished without releasing locks: [\"lock-scope\"]"
+)]
+async fn panics_if_finished_without_releasing_locks() {
+    parcheck::runner()
+        .run(["unreleased_locks"], || async {
+            parcheck::task("unreleased_locks", async {
+                parcheck::operation!(
+                    "acquire",
+                    [ParcheckLock::AcquireExclusive {
+                        scope: "lock-scope".into()
+                    }],
+                    { async {} }
+                )
+                .await;
+            })
+            .await;
+        })
+        .await;
+}

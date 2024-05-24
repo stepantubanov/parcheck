@@ -147,7 +147,7 @@ impl Controller {
     async fn recv_event(&mut self) {
         // Channel can't be closed here because controller keeps a sender too.
         let (id, event) = self.events_rx.recv().await.expect("channel closed");
-        let (_, state) = &mut self.tasks[id.0];
+        let (task, state) = &mut self.tasks[id.0];
         *state = match event {
             TaskEvent::TaskStarted => TaskState::OutsideOperation,
             TaskEvent::OperationPermitRequested {
@@ -170,12 +170,24 @@ impl Controller {
             }
             TaskEvent::OperationFinished => {
                 let TaskState::InsideOperation { .. } = state else {
-                    panic!("received OperationFinished when not inside operation");
+                    panic!(
+                        "task '{}': received OperationFinished when not inside operation",
+                        task.name().0
+                    );
                 };
 
                 TaskState::OutsideOperation
             }
-            TaskEvent::TaskFinished => TaskState::Finished,
+            TaskEvent::TaskFinished => {
+                let locks = self.locked_state.acquired_locks(id);
+                if !locks.is_empty() {
+                    panic!(
+                        "task '{}': finished without releasing locks: {locks:?}",
+                        task.name().0
+                    );
+                }
+                TaskState::Finished
+            }
         };
     }
 }
@@ -261,6 +273,18 @@ impl LockedState {
                 holders.swap_remove(idx);
             }
         }
+    }
+
+    fn acquired_locks(&self, task_id: TaskId) -> Vec<String> {
+        self.scopes
+            .iter()
+            .filter(move |(_, holders)| {
+                holders
+                    .iter()
+                    .any(|(holder_task_id, _)| *holder_task_id == task_id)
+            })
+            .map(|(scope, _)| scope.clone())
+            .collect()
     }
 }
 
