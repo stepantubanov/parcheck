@@ -10,16 +10,13 @@ use disabled as api;
 
 #[doc(hidden)]
 pub mod private {
-    pub use super::api::{
-        operation::{operation, OperationMetadata},
-        task::task,
-    };
+    pub use super::api::operation::{operation, OperationMetadata};
 }
 
 pub use api::task::task;
 
 #[cfg(feature = "enable")]
-pub use enabled::runner::runner;
+pub use enabled::runner::{runner, Runner};
 
 #[derive(Clone, Debug)]
 pub enum ParcheckLock {
