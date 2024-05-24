@@ -20,18 +20,20 @@ macro_rules! task {
 
 #[macro_export]
 macro_rules! operation {
-    ([$($lock:expr),+], { $fut:expr }) => {
+    ($name:literal, [$($lock:expr),+], { $fut:expr }) => {
         {
             static METADATA: $crate::private::OperationMetadata = $crate::private::OperationMetadata {
+                name: $name,
                 file: file!(),
                 line: line!(),
             };
             $crate::private::operation(&METADATA, vec![$($lock),+], $fut)
         }
     };
-    ({$fut:expr}) => {
+    ($name:literal, {$fut:expr}) => {
         {
             static METADATA: $crate::private::OperationMetadata = $crate::private::OperationMetadata {
+                name: $name,
                 file: file!(),
                 line: line!(),
             };

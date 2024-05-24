@@ -11,9 +11,23 @@ use crate::{enabled::operation::OperationMetadata, ParcheckLock};
 pub async fn task<F: Future>(name: &str, f: F) -> F::Output {
     if let Some(task) = Task::pop_expected_task(name) {
         task.send_event(TaskEvent::TaskStarted).await;
-        let value = TASK.scope(task.clone(), f).await;
-        task.send_event(TaskEvent::TaskFinished).await;
 
+        #[cfg(not(feature = "tracing"))]
+        let value = TASK.scope(task.clone(), f).await;
+
+        #[cfg(feature = "tracing")]
+        let value = {
+            use tracing::instrument::Instrument;
+            TASK.scope(task.clone(), f)
+                .instrument(tracing::info_span!(
+                    "parcheck.task",
+                    "parcheck.task.id" = task.id().0,
+                    "parcheck.task.name" = name,
+                ))
+                .await
+        };
+
+        task.send_event(TaskEvent::TaskFinished).await;
         value
     } else {
         f.await

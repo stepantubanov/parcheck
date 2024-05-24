@@ -18,19 +18,19 @@ impl Observer {
 
     async fn execute(&self, process: &str) {
         parcheck::task!(format!("execute:{process}"), async {
-            parcheck::operation!({
+            parcheck::operation!("append:1", {
                 async {
                     self.append(process);
                 }
             })
             .await;
-            parcheck::operation!({
+            parcheck::operation!("append:2", {
                 async {
                     self.append(process);
                 }
             })
             .await;
-            parcheck::operation!({
+            parcheck::operation!("append:3", {
                 async {
                     self.append(process);
                 }
@@ -130,15 +130,15 @@ async fn does_not_double_panic() {
 
 #[tokio::test]
 #[should_panic(
-    expected = "operation already in progress for task 'reentrant' (operation at tests/examples/basic.rs:139"
+    expected = "operation 'outer' already in progress for task 'reentrant' (operation at tests/examples/basic.rs:139"
 )]
 async fn detects_reentrant_task() {
     parcheck::runner()
         .run(["reentrant"], || async move {
             parcheck::task("reentrant", async {
-                parcheck::operation!({
+                parcheck::operation!("outer", {
                     async {
-                        parcheck::operation!({ async {} }).await;
+                        parcheck::operation!("inner", { async {} }).await;
                     }
                 })
                 .await;

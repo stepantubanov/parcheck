@@ -10,6 +10,7 @@ use crate::{
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct OperationMetadata {
+    pub name: &'static str,
     pub file: &'static str,
     pub line: u32,
 }
@@ -35,7 +36,8 @@ pub async fn operation<F: Future>(
         OperationPermit::Granted => {}
         OperationPermit::OperationAlreadyInProgress { other } => {
             panic!(
-                "operation already in progress for task '{}' (operation at {}:{})",
+                "operation '{}' already in progress for task '{}' (operation at {}:{})",
+                other.name,
                 task.name().0,
                 other.file,
                 other.line
@@ -50,8 +52,9 @@ pub async fn operation<F: Future>(
         use tracing::instrument::Instrument;
         f.instrument(tracing::info_span!(
             "parcheck.operation",
-            "operation.file" = metadata.file,
-            "operation.line" = metadata.line
+            "parcheck.operation.name" = metadata.name,
+            "parcheck.file" = metadata.file,
+            "parcheck.line" = metadata.line
         ))
         .await
     };

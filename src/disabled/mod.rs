@@ -34,13 +34,13 @@ macro_rules! task {
 
 #[macro_export]
 macro_rules! operation {
-    ([$($lock:expr),+], { $fut:expr }) => {{
+    ($name:literal, [$($lock:expr),+], { $fut:expr }) => {{
         {
             let _ = || [$($lock),+];
         }
         $fut
     }};
-    ({ $fut:expr }) => {{
+    ($name:literal, { $fut:expr }) => {{
         $fut
     }};
 }
