@@ -5,6 +5,7 @@ use std::{
     num::ParseIntError,
     panic::{self, AssertUnwindSafe},
     str::FromStr,
+    time::Duration,
 };
 
 use fastrand::Rng;
@@ -105,6 +106,9 @@ impl Runner {
         F: FnMut(T) -> Fut,
         Fut: Future<Output = T>,
     {
+        // TODO: add to config
+        const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+
         let initial_tasks: Vec<TaskName> = initial_tasks
             .into_iter()
             .map(|name| TaskName(name.into()))
@@ -116,7 +120,7 @@ impl Runner {
 
                 let control = async {
                     for &task_id in &trace.task_ids {
-                        let _tasks = controller.ready().await;
+                        let _tasks = controller.ready(WAIT_TIMEOUT).await;
                         controller.step_forward(task_id).await;
                     }
                 };
@@ -139,7 +143,7 @@ impl Runner {
                 let mut cursor = schedule_tree.pick_unfinished_path(&mut rng).unwrap();
 
                 loop {
-                    let tasks = controller.ready().await;
+                    let tasks = controller.ready(WAIT_TIMEOUT).await;
                     let Some(task_id) = cursor.visit_and_pick(tasks, &mut rng) else {
                         break;
                     };

@@ -1,6 +1,9 @@
-use std::{collections::HashMap, mem::replace};
+use std::{collections::HashMap, mem::replace, time::Duration};
 
-use tokio::sync::{mpsc, oneshot};
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::error::Elapsed,
+};
 
 use crate::{
     enabled::{
@@ -58,31 +61,55 @@ impl Controller {
         }
     }
 
-    pub(crate) async fn ready(&mut self) -> &[(Task, TaskState)] {
-        // TODO: timeout
-
-        loop {
-            if self.tasks.iter().all(|(_, state)| {
-                matches!(
-                    state,
-                    TaskState::WaitingForPermit { .. } | TaskState::Finished
-                )
-            }) {
-                for (task, state) in &mut self.tasks {
-                    let TaskState::WaitingForPermit {
-                        locks,
-                        blocked_locks,
-                        ..
-                    } = state
-                    else {
-                        continue;
-                    };
-                    *blocked_locks = self.locked_state.blocked(task.id(), locks);
+    pub(crate) async fn ready(&mut self, timeout: Duration) -> &[(Task, TaskState)] {
+        let this = &mut *self;
+        let result = tokio::time::timeout(timeout, async move {
+            loop {
+                if this.tasks.iter().all(|(_, state)| {
+                    matches!(
+                        state,
+                        TaskState::WaitingForPermit { .. } | TaskState::Finished
+                    )
+                }) {
+                    for (task, state) in &mut this.tasks {
+                        let TaskState::WaitingForPermit {
+                            locks,
+                            blocked_locks,
+                            ..
+                        } = state
+                        else {
+                            continue;
+                        };
+                        *blocked_locks = this.locked_state.blocked(task.id(), locks);
+                    }
+                    break;
                 }
-                return &self.tasks;
-            }
 
-            self.recv_event().await;
+                this.recv_event().await;
+            }
+        })
+        .await;
+
+        match result {
+            Ok(()) => &self.tasks,
+            Err(Elapsed { .. }) => {
+                let tasks_in_progress: Vec<_> = self
+                    .tasks
+                    .iter()
+                    .filter_map(|(task, state)| match state {
+                        TaskState::InsideOperation { metadata } => Some(format!(
+                            "task '{}' in operation '{}' (at {}:{})",
+                            task.name().0,
+                            metadata.name,
+                            metadata.file,
+                            metadata.line
+                        )),
+                        _ => None,
+                    })
+                    .collect();
+
+                panic!("timed out, tasks in progress: {tasks_in_progress:?}");
+            }
         }
     }
 
