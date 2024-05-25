@@ -144,6 +144,10 @@ impl Controller {
         self.locked_state.release_locks(id, &locks);
     }
 
+    pub(crate) fn tasks(&self) -> &[(Task, TaskState)] {
+        &self.tasks
+    }
+
     async fn recv_event(&mut self) {
         // Channel can't be closed here because controller keeps a sender too.
         let (id, event) = self.events_rx.recv().await.expect("channel closed");

@@ -66,3 +66,57 @@ async fn panics_if_finished_without_releasing_locks() {
         })
         .await;
 }
+
+#[tokio::test]
+#[should_panic(expected = "some tasks did not finish")]
+async fn detects_deadlocks() {
+    async fn execute(name: &str, lock_a: &str, lock_b: &str) {
+        parcheck::task(name, async {
+            parcheck::operation!(
+                "acquire",
+                [ParcheckLock::AcquireExclusive {
+                    scope: lock_a.into()
+                }],
+                { async {} }
+            )
+            .await;
+
+            parcheck::operation!(
+                "acquire",
+                [ParcheckLock::AcquireExclusive {
+                    scope: lock_b.into()
+                }],
+                { async {} }
+            )
+            .await;
+
+            parcheck::operation!(
+                "release",
+                [ParcheckLock::Release {
+                    scope: lock_b.into()
+                }],
+                { async {} }
+            )
+            .await;
+
+            parcheck::operation!(
+                "release",
+                [ParcheckLock::Release {
+                    scope: lock_a.into()
+                }],
+                { async {} }
+            )
+            .await;
+        })
+        .await;
+    }
+
+    parcheck::runner()
+        .run(["deadlock:a", "deadlock:b"], || async {
+            tokio::join!(
+                execute("deadlock:a", "0", "1"),
+                execute("deadlock:b", "1", "0"),
+            );
+        })
+        .await;
+}

@@ -12,7 +12,7 @@ use fastrand::Rng;
 use futures_util::{join, FutureExt};
 
 use crate::enabled::{
-    controller::Controller,
+    controller::{Controller, TaskState},
     schedule_tree::ScheduleTree,
     task::{TaskId, TaskName},
 };
@@ -151,6 +151,33 @@ impl Runner {
                     trace.task_ids.push(task_id);
                     controller.step_forward(task_id).await;
                 }
+
+                // TODO: move this logic
+                if !controller
+                    .tasks()
+                    .iter()
+                    .all(|(_, state)| matches!(state, TaskState::Finished))
+                {
+                    let blocked_tasks = controller
+                        .tasks()
+                        .iter()
+                        .filter_map(|(task, state)| match state {
+                            TaskState::WaitingForPermit {
+                                metadata,
+                                blocked_locks,
+                                ..
+                            } if !blocked_locks.is_empty() => Some(format!(
+                                "task '{}' in operation '{}' - blocked by locks",
+                                task.name().0,
+                                metadata.name
+                            )),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>();
+                    panic!("some tasks did not finish. blocked tasks: {blocked_tasks:?}");
+                }
+
+                drop(controller);
             };
 
             let result = AssertUnwindSafe(async {
