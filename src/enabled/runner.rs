@@ -158,6 +158,18 @@ impl Runner {
                     .iter()
                     .all(|(_, state)| matches!(state, TaskState::Finished))
                 {
+                    let in_progress_tasks = controller
+                        .tasks()
+                        .iter()
+                        .filter_map(|(task, state)| match state {
+                            TaskState::InsideOperation { metadata } => Some(format!(
+                                "task '{}' in operation '{}'",
+                                task.name().0,
+                                metadata.name
+                            )),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>();
                     let blocked_tasks = controller
                         .tasks()
                         .iter()
@@ -174,7 +186,8 @@ impl Runner {
                             _ => None,
                         })
                         .collect::<Vec<_>>();
-                    panic!("some tasks did not finish. blocked tasks: {blocked_tasks:?}");
+
+                    panic!("some tasks did not finish. in progress tasks: {in_progress_tasks:?}, blocked tasks: {blocked_tasks:?}");
                 }
 
                 drop(controller);
