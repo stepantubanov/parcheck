@@ -273,8 +273,9 @@ impl Runner {
                     if let Some(on_panic) = self.on_panic {
                         on_panic(&trace);
                     } else {
+                        let env_value = trace.to_string();
                         eprintln!(
-                            "note: use `PARCHECK_REPLAY=\"{trace}\"` to replay the same schedule"
+                            "note: use `PARCHECK_REPLAY={env_value:?}` to replay the same schedule"
                         );
                     }
                     panic::resume_unwind(error);
@@ -308,7 +309,7 @@ impl fmt::Display for Trace {
         let (task_id, task_name, op_name) = &self.steps[0];
         write!(f, "{}:{}.{}", task_id.0, task_name.0, op_name.0)?;
         for (task_id, task_name, op_name) in &self.steps[1..] {
-            write!(f, "\n{}:{}.{}", task_id.0, task_name.0, op_name.0)?;
+            write!(f, " > {}:{}.{}", task_id.0, task_name.0, op_name.0)?;
         }
         Ok(())
     }
@@ -319,7 +320,7 @@ impl FromStr for Trace {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let steps = s
-            .split('\n')
+            .split(" > ")
             .map(|step| {
                 let (task_id, names) = step.split_once(':').ok_or(ParseTraceError)?;
                 let (task_name, op_name) = names.split_once('.').ok_or(ParseTraceError)?;
