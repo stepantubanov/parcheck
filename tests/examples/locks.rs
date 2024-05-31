@@ -5,37 +5,39 @@ use parcheck::ParcheckLock;
 static LOCK: AtomicBool = AtomicBool::new(false);
 
 async fn execute(process: &str) {
-    parcheck::task(&format!("locks:{process}"), async {
-        parcheck::operation!(
-            "acquire",
-            vec![ParcheckLock::AcquireExclusive { scope: "".into() }],
-            {
-                async {
-                    LOCK.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-                        .expect("already locked, shouldn't execute this schedule");
+    parcheck::task!(&format!("locks:{process}"), {
+        async {
+            parcheck::operation!(
+                "acquire",
+                vec![ParcheckLock::AcquireExclusive { scope: "".into() }],
+                {
+                    async {
+                        LOCK.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+                            .expect("already locked, shouldn't execute this schedule");
+                    }
                 }
-            }
-        )
-        .await;
+            )
+            .await;
 
-        parcheck::operation!("locked", {
-            async {
-                assert!(LOCK.load(Ordering::Relaxed), "should be locked");
-            }
-        })
-        .await;
-
-        parcheck::operation!(
-            "release",
-            vec![ParcheckLock::Release { scope: "".into() }],
-            {
+            parcheck::operation!("locked", {
                 async {
-                    LOCK.compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
-                        .expect("already unlocked, shouldn't be possible");
+                    assert!(LOCK.load(Ordering::Relaxed), "should be locked");
                 }
-            }
-        )
-        .await;
+            })
+            .await;
+
+            parcheck::operation!(
+                "release",
+                vec![ParcheckLock::Release { scope: "".into() }],
+                {
+                    async {
+                        LOCK.compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
+                            .expect("already unlocked, shouldn't be possible");
+                    }
+                }
+            )
+            .await;
+        }
     })
     .await;
 }
@@ -56,15 +58,17 @@ async fn respects_locks() {
 async fn panics_if_finished_without_releasing_locks() {
     parcheck::runner()
         .run(["unreleased_locks"], || async {
-            parcheck::task("unreleased_locks", async {
-                parcheck::operation!(
-                    "acquire",
-                    vec![ParcheckLock::AcquireExclusive {
-                        scope: "lock-scope".into()
-                    }],
-                    { async {} }
-                )
-                .await;
+            parcheck::task!("unreleased_locks", {
+                async {
+                    parcheck::operation!(
+                        "acquire",
+                        vec![ParcheckLock::AcquireExclusive {
+                            scope: "lock-scope".into()
+                        }],
+                        { async {} }
+                    )
+                    .await;
+                }
             })
             .await;
         })
@@ -75,42 +79,44 @@ async fn panics_if_finished_without_releasing_locks() {
 #[should_panic(expected = "some tasks did not finish")]
 async fn detects_deadlocks() {
     async fn execute(name: &str, lock_a: &str, lock_b: &str) {
-        parcheck::task(name, async {
-            parcheck::operation!(
-                "acquire",
-                vec![ParcheckLock::AcquireExclusive {
-                    scope: lock_a.into()
-                }],
-                { async {} }
-            )
-            .await;
+        parcheck::task!(name, {
+            async {
+                parcheck::operation!(
+                    "acquire",
+                    vec![ParcheckLock::AcquireExclusive {
+                        scope: lock_a.into()
+                    }],
+                    { async {} }
+                )
+                .await;
 
-            parcheck::operation!(
-                "acquire",
-                vec![ParcheckLock::AcquireExclusive {
-                    scope: lock_b.into()
-                }],
-                { async {} }
-            )
-            .await;
+                parcheck::operation!(
+                    "acquire",
+                    vec![ParcheckLock::AcquireExclusive {
+                        scope: lock_b.into()
+                    }],
+                    { async {} }
+                )
+                .await;
 
-            parcheck::operation!(
-                "release",
-                vec![ParcheckLock::Release {
-                    scope: lock_b.into()
-                }],
-                { async {} }
-            )
-            .await;
+                parcheck::operation!(
+                    "release",
+                    vec![ParcheckLock::Release {
+                        scope: lock_b.into()
+                    }],
+                    { async {} }
+                )
+                .await;
 
-            parcheck::operation!(
-                "release",
-                vec![ParcheckLock::Release {
-                    scope: lock_a.into()
-                }],
-                { async {} }
-            )
-            .await;
+                parcheck::operation!(
+                    "release",
+                    vec![ParcheckLock::Release {
+                        scope: lock_a.into()
+                    }],
+                    { async {} }
+                )
+                .await;
+            }
         })
         .await;
     }

@@ -13,8 +13,8 @@ macro_rules! cfg_if {
 
 #[macro_export]
 macro_rules! task {
-    ($name:expr, $fut:expr) => {
-        $crate::task(&*$name, $fut)
+    ($name:expr, { $fut:expr }) => {
+        $crate::private::task(&*$name, $fut)
     };
 }
 

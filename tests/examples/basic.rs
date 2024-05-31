@@ -17,25 +17,27 @@ impl Observer {
     }
 
     async fn execute(&self, process: &str) {
-        parcheck::task!(format!("execute:{process}"), async {
-            parcheck::operation!("append:1", {
-                async {
-                    self.append(process);
-                }
-            })
-            .await;
-            parcheck::operation!("append:2", {
-                async {
-                    self.append(process);
-                }
-            })
-            .await;
-            parcheck::operation!("append:3", {
-                async {
-                    self.append(process);
-                }
-            })
-            .await;
+        parcheck::task!(format!("execute:{process}"), {
+            async {
+                parcheck::operation!("append:1", {
+                    async {
+                        self.append(process);
+                    }
+                })
+                .await;
+                parcheck::operation!("append:2", {
+                    async {
+                        self.append(process);
+                    }
+                })
+                .await;
+                parcheck::operation!("append:3", {
+                    async {
+                        self.append(process);
+                    }
+                })
+                .await;
+            }
         })
         .await;
     }
@@ -96,7 +98,7 @@ async fn no_tasks() {
 async fn one_empty_task() {
     parcheck::runner()
         .run(["one"], || async move {
-            parcheck::task("one", async {}).await;
+            parcheck::task!("one", { async {} }).await;
         })
         .await;
 }
@@ -106,8 +108,8 @@ async fn two_empty_tasks() {
     parcheck::runner()
         .run(["task_a", "task_b"], || async move {
             tokio::join!(
-                parcheck::task("task_a", async {}),
-                parcheck::task("task_b", async {}),
+                parcheck::task!("task_a", { async {} }),
+                parcheck::task!("task_b", { async {} }),
             );
         })
         .await;
@@ -119,8 +121,8 @@ async fn does_not_double_panic() {
     parcheck::runner()
         .run(["task_a", "task_b"], || async move {
             tokio::join!(
-                parcheck::task("task_a", async {}),
-                parcheck::task("task_b", async {}),
+                parcheck::task!("task_a", { async {} }),
+                parcheck::task!("task_b", { async {} }),
             );
 
             panic!("some kind of test failure");
@@ -130,18 +132,20 @@ async fn does_not_double_panic() {
 
 #[tokio::test]
 #[should_panic(
-    expected = "operation 'outer' already in progress for task 'reentrant' (operation at tests/examples/basic.rs:139"
+    expected = "operation 'outer' already in progress for task 'reentrant' (operation at tests/examples/basic.rs:142)"
 )]
 async fn detects_reentrant_task() {
     parcheck::runner()
         .run(["reentrant"], || async move {
-            parcheck::task("reentrant", async {
-                parcheck::operation!("outer", {
-                    async {
-                        parcheck::operation!("inner", { async {} }).await;
-                    }
-                })
-                .await;
+            parcheck::task!("reentrant", {
+                async {
+                    parcheck::operation!("outer", {
+                        async {
+                            parcheck::operation!("inner", { async {} }).await;
+                        }
+                    })
+                    .await;
+                }
             })
             .await;
         })
@@ -154,9 +158,11 @@ async fn replays_prefix_trace() {
         // only a prefix of an actual execution
         .replay("0,0".parse().unwrap())
         .run(["replays_prefix_trace"], || async {
-            parcheck::task("replays_prefix_trace", async {
-                for _ in 0..3 {
-                    parcheck::operation!("op", { async {} }).await;
+            parcheck::task!("replays_prefix_trace", {
+                async {
+                    for _ in 0..3 {
+                        parcheck::operation!("op", { async {} }).await;
+                    }
                 }
             })
             .await;
@@ -169,9 +175,11 @@ async fn replays_full_trace() {
     parcheck::runner()
         .replay("0,0,0".parse().unwrap())
         .run(["replays_full_trace"], || async {
-            parcheck::task("replays_full_trace", async {
-                for _ in 0..3 {
-                    parcheck::operation!("op", { async {} }).await;
+            parcheck::task!("replays_full_trace", {
+                async {
+                    for _ in 0..3 {
+                        parcheck::operation!("op", { async {} }).await;
+                    }
                 }
             })
             .await;
