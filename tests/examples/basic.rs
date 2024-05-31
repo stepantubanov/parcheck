@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use parcheck::Trace;
+
 struct Observer {
     trace: Mutex<String>,
 }
@@ -132,7 +134,7 @@ async fn does_not_double_panic() {
 
 #[tokio::test]
 #[should_panic(
-    expected = "operation 'outer' already in progress for task 'reentrant' (operation at tests/examples/basic.rs:142)"
+    expected = "operation 'outer' already in progress for task 'reentrant' (operation at tests/examples/basic.rs:144)"
 )]
 async fn detects_reentrant_task() {
     parcheck::runner()
@@ -154,9 +156,13 @@ async fn detects_reentrant_task() {
 
 #[tokio::test]
 async fn replays_prefix_trace() {
+    // only a prefix of an actual execution
+    let trace: Trace = "0:replays_prefix_trace.op,0:replays_prefix_trace.op"
+        .parse()
+        .unwrap();
+
     parcheck::runner()
-        // only a prefix of an actual execution
-        .replay("0,0".parse().unwrap())
+        .replay(trace)
         .run(["replays_prefix_trace"], || async {
             parcheck::task!("replays_prefix_trace", {
                 async {
@@ -172,8 +178,12 @@ async fn replays_prefix_trace() {
 
 #[tokio::test]
 async fn replays_full_trace() {
+    let trace: Trace = "0:replays_full_trace.op,0:replays_full_trace.op,0:replays_full_trace.op"
+        .parse()
+        .unwrap();
+
     parcheck::runner()
-        .replay("0,0,0".parse().unwrap())
+        .replay(trace)
         .run(["replays_full_trace"], || async {
             parcheck::task!("replays_full_trace", {
                 async {

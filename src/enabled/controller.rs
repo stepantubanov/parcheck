@@ -41,7 +41,18 @@ pub(crate) enum TaskState {
 
 impl TaskState {
     pub(crate) fn can_execute(&self) -> bool {
-        matches!(self, Self::WaitingForPermit { blocked_locks, .. } if blocked_locks.is_empty())
+        self.executable_op().is_some()
+    }
+
+    pub(crate) fn executable_op(&self) -> Option<&'static OperationMetadata> {
+        match self {
+            Self::WaitingForPermit {
+                metadata,
+                blocked_locks,
+                ..
+            } if blocked_locks.is_empty() => Some(metadata),
+            _ => None,
+        }
     }
 }
 
