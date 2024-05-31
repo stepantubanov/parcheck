@@ -21,7 +21,7 @@ async fn doesnt_complain_about_unused_vars() {
     let result = parcheck::task!(format!("task:{x}"), async {
         parcheck::operation!(
             "op",
-            [ParcheckLock::AcquireExclusive {
+            vec![ParcheckLock::AcquireExclusive {
                 scope: "scope".into()
             }],
             { async { 123 } }
@@ -34,7 +34,7 @@ async fn doesnt_complain_about_unused_vars() {
     let result = parcheck::task("task", async {
         parcheck::operation!(
             "op",
-            [ParcheckLock::AcquireExclusive {
+            vec![ParcheckLock::AcquireExclusive {
                 scope: "scope".into()
             }],
             { async { 123 } }

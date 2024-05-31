@@ -34,9 +34,9 @@ macro_rules! task {
 
 #[macro_export]
 macro_rules! operation {
-    ($name:literal, [$($lock:expr),+], { $fut:expr }) => {{
+    ($name:literal, $locks:expr, { $fut:expr }) => {{
         {
-            let _ = || [$($lock),+];
+            let _ = || $locks;
         }
         $fut
     }};

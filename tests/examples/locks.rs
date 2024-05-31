@@ -8,7 +8,7 @@ async fn execute(process: &str) {
     parcheck::task(&format!("locks:{process}"), async {
         parcheck::operation!(
             "acquire",
-            [ParcheckLock::AcquireExclusive { scope: "".into() }],
+            vec![ParcheckLock::AcquireExclusive { scope: "".into() }],
             {
                 async {
                     LOCK.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
@@ -25,12 +25,16 @@ async fn execute(process: &str) {
         })
         .await;
 
-        parcheck::operation!("release", [ParcheckLock::Release { scope: "".into() }], {
-            async {
-                LOCK.compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
-                    .expect("already unlocked, shouldn't be possible");
+        parcheck::operation!(
+            "release",
+            vec![ParcheckLock::Release { scope: "".into() }],
+            {
+                async {
+                    LOCK.compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
+                        .expect("already unlocked, shouldn't be possible");
+                }
             }
-        })
+        )
         .await;
     })
     .await;
@@ -55,7 +59,7 @@ async fn panics_if_finished_without_releasing_locks() {
             parcheck::task("unreleased_locks", async {
                 parcheck::operation!(
                     "acquire",
-                    [ParcheckLock::AcquireExclusive {
+                    vec![ParcheckLock::AcquireExclusive {
                         scope: "lock-scope".into()
                     }],
                     { async {} }
@@ -74,7 +78,7 @@ async fn detects_deadlocks() {
         parcheck::task(name, async {
             parcheck::operation!(
                 "acquire",
-                [ParcheckLock::AcquireExclusive {
+                vec![ParcheckLock::AcquireExclusive {
                     scope: lock_a.into()
                 }],
                 { async {} }
@@ -83,7 +87,7 @@ async fn detects_deadlocks() {
 
             parcheck::operation!(
                 "acquire",
-                [ParcheckLock::AcquireExclusive {
+                vec![ParcheckLock::AcquireExclusive {
                     scope: lock_b.into()
                 }],
                 { async {} }
@@ -92,7 +96,7 @@ async fn detects_deadlocks() {
 
             parcheck::operation!(
                 "release",
-                [ParcheckLock::Release {
+                vec![ParcheckLock::Release {
                     scope: lock_b.into()
                 }],
                 { async {} }
@@ -101,7 +105,7 @@ async fn detects_deadlocks() {
 
             parcheck::operation!(
                 "release",
-                [ParcheckLock::Release {
+                vec![ParcheckLock::Release {
                     scope: lock_a.into()
                 }],
                 { async {} }
