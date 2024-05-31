@@ -308,7 +308,7 @@ impl fmt::Display for Trace {
         let (task_id, task_name, op_name) = &self.steps[0];
         write!(f, "{}:{}.{}", task_id.0, task_name.0, op_name.0)?;
         for (task_id, task_name, op_name) in &self.steps[1..] {
-            write!(f, ",{}:{}.{}", task_id.0, task_name.0, op_name.0)?;
+            write!(f, "\n{}:{}.{}", task_id.0, task_name.0, op_name.0)?;
         }
         Ok(())
     }
@@ -319,7 +319,7 @@ impl FromStr for Trace {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let steps = s
-            .split(',')
+            .split('\n')
             .map(|step| {
                 let (task_id, names) = step.split_once(':').ok_or(ParseTraceError)?;
                 let (task_name, op_name) = names.split_once('.').ok_or(ParseTraceError)?;

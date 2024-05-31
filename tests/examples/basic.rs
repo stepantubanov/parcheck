@@ -157,7 +157,7 @@ async fn detects_reentrant_task() {
 #[tokio::test]
 async fn replays_prefix_trace() {
     // only a prefix of an actual execution
-    let trace: Trace = "0:replays_prefix_trace.op,0:replays_prefix_trace.op"
+    let trace: Trace = "0:replays_prefix_trace.op\n0:replays_prefix_trace.op"
         .parse()
         .unwrap();
 
@@ -178,7 +178,7 @@ async fn replays_prefix_trace() {
 
 #[tokio::test]
 async fn replays_full_trace() {
-    let trace: Trace = "0:replays_full_trace.op,0:replays_full_trace.op,0:replays_full_trace.op"
+    let trace: Trace = "0:replays_full_trace.op\n0:replays_full_trace.op\n0:replays_full_trace.op"
         .parse()
         .unwrap();
 
