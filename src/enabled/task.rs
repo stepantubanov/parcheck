@@ -1,14 +1,27 @@
 use std::{
     fmt,
     future::Future,
+    pin::Pin,
     sync::{Arc, Mutex},
+    task::{ready, Context, Poll},
 };
 
-use tokio::sync::{mpsc, oneshot};
+use pin_project_lite::pin_project;
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::futures::TaskLocalFuture,
+};
+
+#[cfg(feature = "tracing")]
+use tracing::{instrument::Instrumented, Instrument};
 
 use crate::{enabled::operation::OperationMetadata, ParcheckLock};
 
-pub async fn task<F: Future>(name: &str, f: F) -> F::Output {
+pub fn task<F: Future>(name: &str, f: F) -> ParcheckTaskFuture<F> {
+    ParcheckTaskFuture::Initial {
+        data: Some((name, f)),
+    }
+    /*
     if let Some(task) = Task::pop_expected_task(name) {
         task.send_event(TaskEvent::TaskStarted);
 
@@ -31,6 +44,79 @@ pub async fn task<F: Future>(name: &str, f: F) -> F::Output {
         value
     } else {
         f.await
+    }
+    */
+}
+
+pin_project! {
+    #[project = ParcheckTaskFutureProj]
+    pub enum ParcheckTaskFuture<'a, F> {
+        Initial {
+            data: Option<(&'a str, F)>,
+        },
+        Controlled {
+            task: Task,
+
+            #[pin]
+            fut: InnerFuture<TaskLocalFuture<Task, F>>,
+        },
+        Uncontrolled {
+            #[pin]
+            fut: F,
+        },
+        Done,
+    }
+}
+
+#[cfg(feature = "tracing")]
+type InnerFuture<F> = Instrumented<F>;
+#[cfg(not(feature = "tracing"))]
+type InnerFuture<F> = F;
+
+impl<'a, F: Future> Future for ParcheckTaskFuture<'a, F> {
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        loop {
+            let this = self.as_mut().project();
+            let new_state = match this {
+                ParcheckTaskFutureProj::Initial { data } => {
+                    let (name, fut) = data.take().unwrap();
+
+                    if let Some(task) = Task::pop_expected_task(name) {
+                        task.send_event(TaskEvent::TaskStarted);
+
+                        let fut = TASK.scope(task.clone(), fut);
+                        Self::Controlled {
+                            #[cfg(feature = "tracing")]
+                            fut: fut.instrument(tracing::info_span!(
+                                "parcheck.task",
+                                "parcheck.task.id" = task.id().0,
+                                "parcheck.task.name" = name,
+                            )),
+                            #[cfg(not(feature = "tracing"))]
+                            fut,
+                            task,
+                        }
+                    } else {
+                        Self::Uncontrolled { fut }
+                    }
+                }
+                ParcheckTaskFutureProj::Controlled { task, fut } => {
+                    let value = ready!(fut.poll(cx));
+                    task.send_event(TaskEvent::TaskFinished);
+                    self.set(Self::Done);
+                    return Poll::Ready(value);
+                }
+                ParcheckTaskFutureProj::Uncontrolled { fut } => {
+                    let value = ready!(fut.poll(cx));
+                    self.set(Self::Done);
+                    return Poll::Ready(value);
+                }
+                ParcheckTaskFutureProj::Done => panic!("future polled after done"),
+            };
+            self.set(new_state);
+        }
     }
 }
 

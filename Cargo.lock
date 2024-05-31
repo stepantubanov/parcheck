@@ -190,6 +190,7 @@ version = "0.1.0-alpha.1"
 dependencies = [
  "fastrand",
  "futures-util",
+ "pin-project-lite",
  "tokio",
  "tracing",
 ]
