@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::mem::size_of_val;
 use std::sync::Mutex;
 
 use parcheck::Trace;
@@ -134,7 +135,7 @@ async fn does_not_double_panic() {
 
 #[tokio::test]
 #[should_panic(
-    expected = "operation 'outer' already in progress for task 'reentrant' (operation at tests/examples/basic.rs:144)"
+    expected = "operation 'outer' already in progress for task 'reentrant' (operation at tests/examples/basic.rs:145)"
 )]
 async fn detects_reentrant_task() {
     parcheck::runner()
@@ -196,4 +197,24 @@ async fn replays_full_trace() {
             .await;
         })
         .await;
+}
+
+#[tokio::test]
+async fn futures_arent_too_large() {
+    let operation = async { [0_u8; 50] };
+    let operation_size = size_of_val(&operation);
+    let wrapped_operation_size =
+        size_of_val(&parcheck::operation!("operation_size", { operation }));
+    assert!(
+        wrapped_operation_size - operation_size < 120,
+        "op future size: {operation_size} -> {wrapped_operation_size}"
+    );
+
+    let task = async { [0_u8; 50] };
+    let task_size = size_of_val(&task);
+    let wrapped_task_size = size_of_val(&parcheck::task!("task_size", { task }));
+    assert!(
+        wrapped_task_size - task_size < 120,
+        "task future size: {task_size} -> {wrapped_task_size}"
+    );
 }

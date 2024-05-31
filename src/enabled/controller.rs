@@ -18,8 +18,8 @@ pub(crate) struct Controller {
     locked_state: LockedState,
     // TODO: spawn tasks
     #[allow(dead_code)]
-    events_tx: mpsc::Sender<(TaskId, TaskEvent)>,
-    events_rx: mpsc::Receiver<(TaskId, TaskEvent)>,
+    events_tx: mpsc::UnboundedSender<(TaskId, TaskEvent)>,
+    events_rx: mpsc::UnboundedReceiver<(TaskId, TaskEvent)>,
 }
 
 #[derive(Debug)]
@@ -58,7 +58,7 @@ impl TaskState {
 
 impl Controller {
     pub(crate) fn register(initial_tasks: &[TaskName]) -> Self {
-        let (events_tx, events_rx) = mpsc::channel(32);
+        let (events_tx, events_rx) = mpsc::unbounded_channel();
         let tasks = initial_tasks
             .iter()
             .enumerate()

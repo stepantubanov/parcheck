@@ -30,8 +30,7 @@ pub async fn operation<F: Future>(
         metadata,
         permit: permit_tx,
         locks,
-    })
-    .await;
+    });
     match permit_rx.await.unwrap_or(OperationPermit::Granted) {
         OperationPermit::Granted => {}
         OperationPermit::OperationAlreadyInProgress { other } => {
@@ -59,6 +58,6 @@ pub async fn operation<F: Future>(
         .await
     };
 
-    task.send_event(task::TaskEvent::OperationFinished).await;
+    task.send_event(task::TaskEvent::OperationFinished);
     value
 }

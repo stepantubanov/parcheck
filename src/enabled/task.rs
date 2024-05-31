@@ -10,7 +10,7 @@ use crate::{enabled::operation::OperationMetadata, ParcheckLock};
 
 pub async fn task<F: Future>(name: &str, f: F) -> F::Output {
     if let Some(task) = Task::pop_expected_task(name) {
-        task.send_event(TaskEvent::TaskStarted).await;
+        task.send_event(TaskEvent::TaskStarted);
 
         #[cfg(not(feature = "tracing"))]
         let value = TASK.scope(task.clone(), f).await;
@@ -27,7 +27,7 @@ pub async fn task<F: Future>(name: &str, f: F) -> F::Output {
                 .await
         };
 
-        task.send_event(TaskEvent::TaskFinished).await;
+        task.send_event(TaskEvent::TaskFinished);
         value
     } else {
         f.await
@@ -73,7 +73,7 @@ pub(crate) enum OperationPermit {
 struct TaskInner {
     id: TaskId,
     name: TaskName,
-    events: mpsc::Sender<(TaskId, TaskEvent)>,
+    events: mpsc::UnboundedSender<(TaskId, TaskEvent)>,
 }
 
 impl fmt::Debug for Task {
@@ -91,7 +91,7 @@ impl Task {
     pub(crate) fn register(
         id: TaskId,
         name: TaskName,
-        events: mpsc::Sender<(TaskId, TaskEvent)>,
+        events: mpsc::UnboundedSender<(TaskId, TaskEvent)>,
     ) -> Self {
         let task = Self {
             inner: Arc::new(TaskInner { id, name, events }),
@@ -100,9 +100,9 @@ impl Task {
         task
     }
 
-    pub(crate) async fn send_event(&self, event: TaskEvent) {
+    pub(crate) fn send_event(&self, event: TaskEvent) {
         // ignore error
-        let _ = self.inner.events.send((self.inner.id, event)).await;
+        let _ = self.inner.events.send((self.inner.id, event));
     }
 
     pub(crate) fn id(&self) -> TaskId {
