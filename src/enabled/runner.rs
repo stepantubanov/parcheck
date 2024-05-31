@@ -12,7 +12,7 @@ use fastrand::Rng;
 use futures_util::{future::BoxFuture, join, FutureExt};
 
 use crate::enabled::{
-    controller::{Controller, TaskState},
+    controller::Controller,
     schedule_tree::ScheduleTree,
     task::{TaskId, TaskName},
 };
@@ -66,6 +66,11 @@ impl Runner {
         }
 
         runner
+    }
+
+    pub fn replay(mut self, trace: Trace) -> Self {
+        self.iteration_config = IterationConfig::Replay { trace };
+        self
     }
 
     pub fn max_iterations(mut self, max_iterations: u64) -> Self {
@@ -123,16 +128,43 @@ impl Runner {
                 let mut controller = Controller::register(&initial_tasks);
 
                 let control = async {
-                    for &task_id in &trace.task_ids {
+                    let mut task_ids_from_trace = trace.task_ids.into_iter();
+                    let mut rng = Rng::new();
+
+                    loop {
                         let _tasks = controller.ready(WAIT_TIMEOUT).await;
                         if let Some(before_step) = &mut self.before_step {
                             before_step().await;
                         }
+
+                        let task_id = task_ids_from_trace.next().or_else(|| {
+                            let candidates = controller
+                                .tasks()
+                                .iter()
+                                .filter_map(|(task, state)| {
+                                    state.can_execute().then_some(task.id())
+                                })
+                                .collect::<Vec<TaskId>>();
+
+                            if candidates.is_empty() {
+                                return None;
+                            }
+
+                            Some(candidates[rng.usize(..candidates.len())])
+                        });
+
+                        let Some(task_id) = task_id else {
+                            break;
+                        };
+
                         controller.step_forward(task_id).await;
                         if let Some(after_step) = &mut self.after_step {
                             after_step().await;
                         }
                     }
+
+                    controller.assert_finished();
+                    drop(controller);
                 };
 
                 (state, _) = join!(f(state), control);
@@ -170,44 +202,7 @@ impl Runner {
                     }
                 }
 
-                // TODO: move this logic
-                if !controller
-                    .tasks()
-                    .iter()
-                    .all(|(_, state)| matches!(state, TaskState::Finished))
-                {
-                    let in_progress_tasks = controller
-                        .tasks()
-                        .iter()
-                        .filter_map(|(task, state)| match state {
-                            TaskState::InsideOperation { metadata } => Some(format!(
-                                "task '{}' in operation '{}'",
-                                task.name().0,
-                                metadata.name
-                            )),
-                            _ => None,
-                        })
-                        .collect::<Vec<_>>();
-                    let blocked_tasks = controller
-                        .tasks()
-                        .iter()
-                        .filter_map(|(task, state)| match state {
-                            TaskState::WaitingForPermit {
-                                metadata,
-                                blocked_locks,
-                                ..
-                            } if !blocked_locks.is_empty() => Some(format!(
-                                "task '{}' in operation '{}' - blocked by locks",
-                                task.name().0,
-                                metadata.name
-                            )),
-                            _ => None,
-                        })
-                        .collect::<Vec<_>>();
-
-                    panic!("some tasks did not finish. in progress tasks: {in_progress_tasks:?}, blocked tasks: {blocked_tasks:?}");
-                }
-
+                controller.assert_finished();
                 drop(controller);
             };
 

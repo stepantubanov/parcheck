@@ -147,3 +147,34 @@ async fn detects_reentrant_task() {
         })
         .await;
 }
+
+#[tokio::test]
+async fn replays_prefix_trace() {
+    parcheck::runner()
+        // only a prefix of an actual execution
+        .replay("0,0".parse().unwrap())
+        .run(["replays_prefix_trace"], || async {
+            parcheck::task("replays_prefix_trace", async {
+                for _ in 0..3 {
+                    parcheck::operation!("op", { async {} }).await;
+                }
+            })
+            .await;
+        })
+        .await;
+}
+
+#[tokio::test]
+async fn replays_full_trace() {
+    parcheck::runner()
+        .replay("0,0,0".parse().unwrap())
+        .run(["replays_full_trace"], || async {
+            parcheck::task("replays_full_trace", async {
+                for _ in 0..3 {
+                    parcheck::operation!("op", { async {} }).await;
+                }
+            })
+            .await;
+        })
+        .await;
+}

@@ -39,6 +39,12 @@ pub(crate) enum TaskState {
     Invalid,
 }
 
+impl TaskState {
+    pub(crate) fn can_execute(&self) -> bool {
+        matches!(self, Self::WaitingForPermit { blocked_locks, .. } if blocked_locks.is_empty())
+    }
+}
+
 impl Controller {
     pub(crate) fn register(initial_tasks: &[TaskName]) -> Self {
         let (events_tx, events_rx) = mpsc::channel(32);
@@ -146,6 +152,47 @@ impl Controller {
 
     pub(crate) fn tasks(&self) -> &[(Task, TaskState)] {
         &self.tasks
+    }
+
+    pub(crate) fn assert_finished(&self) {
+        if self
+            .tasks
+            .iter()
+            .all(|(_, state)| matches!(state, TaskState::Finished))
+        {
+            return;
+        }
+
+        let in_progress_tasks = self
+            .tasks
+            .iter()
+            .filter_map(|(task, state)| match state {
+                TaskState::InsideOperation { metadata } => Some(format!(
+                    "task '{}' in operation '{}'",
+                    task.name().0,
+                    metadata.name
+                )),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let blocked_tasks = self
+            .tasks
+            .iter()
+            .filter_map(|(task, state)| match state {
+                TaskState::WaitingForPermit {
+                    metadata,
+                    blocked_locks,
+                    ..
+                } if !blocked_locks.is_empty() => Some(format!(
+                    "task '{}' in operation '{}' - blocked by locks",
+                    task.name().0,
+                    metadata.name
+                )),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        panic!("some tasks did not finish. in progress tasks: {in_progress_tasks:?}, blocked tasks: {blocked_tasks:?}");
     }
 
     async fn recv_event(&mut self) {

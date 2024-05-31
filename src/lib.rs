@@ -16,7 +16,7 @@ pub mod private {
 pub use api::task::task;
 
 #[cfg(feature = "enable")]
-pub use enabled::runner::{runner, Runner};
+pub use enabled::runner::{runner, Runner, Trace};
 
 #[derive(Clone, Debug)]
 pub enum ParcheckLock {

@@ -117,10 +117,9 @@ impl<'a> PathCursor<'a> {
 
                     assert_eq!(*depth, self.tree.unvisited_leafs[*path].0.len());
 
-                    let unvisited = tasks.iter().filter_map(|(task, state)| {
-                        matches!(state, TaskState::WaitingForPermit { blocked_locks, .. } if blocked_locks.is_empty())
-                            .then_some(task.id())
-                    });
+                    let unvisited = tasks
+                        .iter()
+                        .filter_map(|(task, state)| state.can_execute().then_some(task.id()));
 
                     let num_unvisited = unvisited.clone().count();
                     if num_unvisited == 0 {
