@@ -9,7 +9,9 @@ async fn execute(process: &str) {
         async {
             parcheck::operation!(
                 "acquire",
-                vec![ParcheckLock::AcquireExclusive { scope: "".into() }],
+                vec![ParcheckLock::AcquireExclusive {
+                    scope: String::new()
+                }],
                 {
                     async {
                         LOCK.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
@@ -28,7 +30,9 @@ async fn execute(process: &str) {
 
             parcheck::operation!(
                 "release",
-                vec![ParcheckLock::Release { scope: "".into() }],
+                vec![ParcheckLock::Release {
+                    scope: String::new()
+                }],
                 {
                     async {
                         LOCK.compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)

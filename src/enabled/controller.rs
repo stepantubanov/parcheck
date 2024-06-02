@@ -242,12 +242,11 @@ impl Controller {
             }
             TaskEvent::TaskFinished => {
                 let locks = self.locked_state.acquired_locks(id);
-                if !locks.is_empty() {
-                    panic!(
-                        "task '{}': finished without releasing locks: {locks:?}",
-                        task.name().0
-                    );
-                }
+                assert!(
+                    locks.is_empty(),
+                    "task '{}': finished without releasing locks: {locks:?}",
+                    task.name().0
+                );
                 TaskState::Finished
             }
         };
@@ -299,9 +298,10 @@ impl LockedState {
             };
 
             let holders = self.scopes.entry(scope.clone()).or_default();
-            if has_conflict(task_id, mode, holders) {
-                panic!("acquire_locks() acquire lock conflict on {scope}");
-            };
+            assert!(
+                !has_conflict(task_id, mode, holders),
+                "acquire_locks() acquire lock conflict on {scope}"
+            );
 
             if let Some((_, holder_mode)) = holders
                 .iter_mut()

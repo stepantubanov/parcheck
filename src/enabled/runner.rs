@@ -21,6 +21,7 @@ pub fn runner() -> Runner {
     Runner::from_env()
 }
 
+#[must_use]
 pub struct Runner {
     iteration_config: IterationConfig,
     on_panic: Option<PanicHandler>,
@@ -116,9 +117,10 @@ impl Runner {
         F: FnMut() -> Fut,
         Fut: Future<Output = ()>,
     {
-        self.run_with_state(initial_tasks, (), |()| f()).await
+        self.run_with_state(initial_tasks, (), |()| f()).await;
     }
 
+    #[allow(clippy::too_many_lines)] // TODO: refactor
     pub async fn run_with_state<'a, T, I, F, Fut>(
         mut self,
         initial_tasks: I,
@@ -198,7 +200,7 @@ impl Runner {
                 };
 
                 // TODO: handle panics
-                (state, _) = join!(f(state), control);
+                (state, ()) = join!(f(state), control);
                 return state;
             }
             IterationConfig::Iterate {
@@ -261,7 +263,7 @@ impl Runner {
             };
 
             let result = AssertUnwindSafe(async {
-                (state, _) = join!(f(state), control);
+                (state, ()) = join!(f(state), control);
                 state
             })
             .catch_unwind()
