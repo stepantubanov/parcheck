@@ -21,34 +21,10 @@ pub fn task<F: Future>(name: &str, f: F) -> ParcheckTaskFuture<F> {
     ParcheckTaskFuture::Initial {
         data: Some((name, f)),
     }
-    /*
-    if let Some(task) = Task::pop_expected_task(name) {
-        task.send_event(TaskEvent::TaskStarted);
-
-        #[cfg(not(feature = "tracing"))]
-        let value = TASK.scope(task.clone(), f).await;
-
-        #[cfg(feature = "tracing")]
-        let value = {
-            use tracing::instrument::Instrument;
-            TASK.scope(task.clone(), f)
-                .instrument(tracing::info_span!(
-                    "parcheck.task",
-                    "parcheck.task.id" = task.id().0,
-                    "parcheck.task.name" = name,
-                ))
-                .await
-        };
-
-        task.send_event(TaskEvent::TaskFinished);
-        value
-    } else {
-        f.await
-    }
-    */
 }
 
 pin_project! {
+    #[doc(hidden)]
     #[project = ParcheckTaskFutureProj]
     pub enum ParcheckTaskFuture<'a, F> {
         Initial {
