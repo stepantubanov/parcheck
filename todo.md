@@ -1,1 +1,0 @@
-- Check generated code when parcheck is disabled (prod code)
