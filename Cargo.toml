@@ -20,7 +20,7 @@ large_include_file = "warn"
 fastrand = { version = "2.1", optional = true }
 futures-util = { version = "0.3", optional = true }
 pin-project-lite = { version = "0.2", optional = true }
-tokio = { version = "1", features = ["sync", "rt"], optional = true }
+tokio = { version = "1", features = ["sync", "rt", "time"], optional = true }
 tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
@@ -28,7 +28,7 @@ tokio = { version = "1", features = ["full"] }
 tracing = { version = "0.1" }
 
 [features]
-enable = ["dep:fastrand", "dep:tokio", "dep:futures-util", "dep:pin-project-lite"]
+enable = ["dep:fastrand", "dep:tokio", "tokio/sync", "tokio/rt", "tokio/time", "dep:futures-util", "dep:pin-project-lite"]
 tracing = ["dep:tracing"]
 
 [package.metadata.docs.rs]
