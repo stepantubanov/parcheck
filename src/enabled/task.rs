@@ -42,6 +42,15 @@ pin_project! {
         },
         Done,
     }
+
+    impl<'a, F> PinnedDrop for ParcheckTaskFuture<'a, F> {
+        fn drop(this: Pin<&mut Self>) {
+            let proj = this.project();
+            if let ParcheckTaskFutureProj::Controlled { task, .. } = proj {
+                task.send_event(TaskEvent::TaskFinished);
+            }
+        }
+    }
 }
 
 #[cfg(feature = "tracing")]

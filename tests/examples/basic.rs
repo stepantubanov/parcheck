@@ -2,8 +2,10 @@ use std::collections::HashMap;
 use std::future;
 use std::mem::size_of_val;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use parcheck::Trace;
+use tokio::sync::oneshot;
 
 struct Observer {
     trace: Mutex<String>,
@@ -136,7 +138,7 @@ async fn does_not_double_panic() {
 
 #[tokio::test]
 #[should_panic(
-    expected = "operation 'outer' already in progress for task 'reentrant' (operation at tests/examples/basic.rs:146)"
+    expected = "operation 'outer' already in progress for task 'reentrant' (operation at tests/examples/basic.rs:148)"
 )]
 async fn detects_reentrant_task() {
     parcheck::runner()
@@ -218,4 +220,33 @@ async fn futures_arent_too_large() {
         wrapped_task_size - task_size < 96,
         "task future size: {task_size} -> {wrapped_task_size}"
     );
+}
+
+#[tokio::test]
+async fn handles_cancellation() {
+    tokio::time::timeout(Duration::from_millis(100), async {
+        parcheck::runner()
+            .run(["dropped_task"], || async move {
+                let (tx, rx) = oneshot::channel();
+                let task = parcheck::task!("dropped_task", {
+                    async {
+                        parcheck::operation!("op", {
+                            async {
+                                tx.send(()).unwrap();
+                                future::pending::<()>().await;
+                            }
+                        })
+                        .await;
+                    }
+                });
+
+                tokio::select! {
+                    _ = task => unreachable!(),
+                    _ = rx => {},
+                }
+            })
+            .await;
+    })
+    .await
+    .unwrap();
 }
