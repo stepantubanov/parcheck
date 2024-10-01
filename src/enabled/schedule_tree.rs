@@ -189,14 +189,14 @@ fn tasks_to_nodes(tasks: &[(Task, TaskState)]) -> impl Iterator<Item = Node> + '
 
 fn task_state_to_node_state(task_state: &TaskState) -> NodeState {
     match task_state {
-        TaskState::DidNotStart
-        | TaskState::OutsideOperation
-        | TaskState::InsideOperation { .. }
+        TaskState::NotStarted
+        | TaskState::ExecutingOutsideOperation
+        | TaskState::ExecutingOperation { .. }
         | TaskState::Invalid => unreachable!(),
-        TaskState::WaitingForPermit { blocked_locks, .. } if blocked_locks.is_empty() => {
+        TaskState::WaitingToStartOperation { blocked_locks, .. } if blocked_locks.is_empty() => {
             NodeState::Unvisited
         }
-        TaskState::WaitingForPermit { .. } => NodeState::Unreachable {
+        TaskState::WaitingToStartOperation { .. } => NodeState::Unreachable {
             reason: "blocked by locks",
         },
         TaskState::Finished => NodeState::Unreachable {

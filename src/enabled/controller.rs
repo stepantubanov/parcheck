@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem::replace, time::Duration};
+use std::{collections::HashMap, fmt, mem::replace, time::Duration};
 
 use tokio::{
     sync::{mpsc, oneshot},
@@ -22,21 +22,48 @@ pub(crate) struct Controller {
     events_rx: mpsc::UnboundedReceiver<(TaskId, TaskEvent)>,
 }
 
-#[derive(Debug)]
 pub(crate) enum TaskState {
-    DidNotStart,
-    OutsideOperation,
-    WaitingForPermit {
+    NotStarted,
+    ExecutingOutsideOperation,
+    WaitingToStartOperation {
         metadata: &'static OperationMetadata,
         permit: oneshot::Sender<OperationPermit>,
         locks: Vec<ParcheckLock>,
         blocked_locks: Vec<ParcheckLock>,
     },
-    InsideOperation {
+    ExecutingOperation {
         metadata: &'static OperationMetadata,
     },
     Finished,
     Invalid,
+}
+
+impl fmt::Display for OperationMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "'{}' (at {}:{})", self.name, self.file, self.line)
+    }
+}
+
+impl fmt::Debug for TaskState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotStarted => f.write_str("not-started"),
+            Self::ExecutingOutsideOperation => f.write_str("executing-outside-parcheck-operation"),
+            Self::WaitingToStartOperation {
+                metadata,
+                locks,
+                blocked_locks,
+                ..
+            } => {
+                write!(f, "waiting-to-start-operation {metadata} (locks: {locks:?}, blocked-locks: {blocked_locks:?})")
+            }
+            Self::ExecutingOperation { metadata } => {
+                write!(f, "executing-operation {metadata}")
+            }
+            Self::Finished => f.write_str("finished"),
+            Self::Invalid => f.write_str("invalid"),
+        }
+    }
 }
 
 impl TaskState {
@@ -46,7 +73,7 @@ impl TaskState {
 
     pub(crate) fn executable_op(&self) -> Option<&'static OperationMetadata> {
         match self {
-            Self::WaitingForPermit {
+            Self::WaitingToStartOperation {
                 metadata,
                 blocked_locks,
                 ..
@@ -65,7 +92,7 @@ impl Controller {
             .map(|(i, name)| {
                 (
                     Task::register(TaskId(i), name.clone(), events_tx.clone()),
-                    TaskState::DidNotStart,
+                    TaskState::NotStarted,
                 )
             })
             .collect();
@@ -85,11 +112,11 @@ impl Controller {
                 if this.tasks.iter().all(|(_, state)| {
                     matches!(
                         state,
-                        TaskState::WaitingForPermit { .. } | TaskState::Finished
+                        TaskState::WaitingToStartOperation { .. } | TaskState::Finished
                     )
                 }) {
                     for (task, state) in &mut this.tasks {
-                        let TaskState::WaitingForPermit {
+                        let TaskState::WaitingToStartOperation {
                             locks,
                             blocked_locks,
                             ..
@@ -110,22 +137,12 @@ impl Controller {
         match result {
             Ok(()) => &self.tasks,
             Err(Elapsed { .. }) => {
-                let tasks_in_progress: Vec<_> = self
+                let tasks = self
                     .tasks
                     .iter()
-                    .filter_map(|(task, state)| match state {
-                        TaskState::InsideOperation { metadata } => Some(format!(
-                            "task '{}' in operation '{}' (at {}:{})",
-                            task.name().0,
-                            metadata.name,
-                            metadata.file,
-                            metadata.line
-                        )),
-                        _ => None,
-                    })
-                    .collect();
-
-                panic!("timed out, tasks in progress: {tasks_in_progress:?}");
+                    .map(|(task, state)| format!("task '{}': {state:?}", task.name().0))
+                    .collect::<Vec<_>>();
+                panic!("timed out, tasks: {tasks:?}");
             }
         }
     }
@@ -134,7 +151,7 @@ impl Controller {
         let (_, state) = &mut self.tasks[id.0];
 
         let prev = replace(state, TaskState::Invalid);
-        let TaskState::WaitingForPermit {
+        let TaskState::WaitingToStartOperation {
             metadata,
             permit,
             locks,
@@ -143,7 +160,7 @@ impl Controller {
         else {
             panic!("step_forward: task not waiting: {prev:?}");
         };
-        *state = TaskState::InsideOperation { metadata };
+        *state = TaskState::ExecutingOperation { metadata };
 
         assert!(
             blocked_locks.is_empty(),
@@ -154,7 +171,7 @@ impl Controller {
         // ignore error (channel closed)
         let _ = permit.send(OperationPermit::Granted);
 
-        while matches!(self.tasks[id.0], (_, TaskState::InsideOperation { .. })) {
+        while matches!(self.tasks[id.0], (_, TaskState::ExecutingOperation { .. })) {
             self.recv_event().await;
         }
 
@@ -178,7 +195,7 @@ impl Controller {
             .tasks
             .iter()
             .filter_map(|(task, state)| match state {
-                TaskState::InsideOperation { metadata } => Some(format!(
+                TaskState::ExecutingOperation { metadata } => Some(format!(
                     "task '{}' in operation '{}'",
                     task.name().0,
                     metadata.name
@@ -190,7 +207,7 @@ impl Controller {
             .tasks
             .iter()
             .filter_map(|(task, state)| match state {
-                TaskState::WaitingForPermit {
+                TaskState::WaitingToStartOperation {
                     metadata,
                     blocked_locks,
                     ..
@@ -211,19 +228,19 @@ impl Controller {
         let (id, event) = self.events_rx.recv().await.expect("channel closed");
         let (task, state) = &mut self.tasks[id.0];
         *state = match event {
-            TaskEvent::TaskStarted => TaskState::OutsideOperation,
+            TaskEvent::TaskStarted => TaskState::ExecutingOutsideOperation,
             TaskEvent::OperationPermitRequested {
                 metadata,
                 permit,
                 locks,
             } => {
-                if let TaskState::InsideOperation { metadata: other } = state {
+                if let TaskState::ExecutingOperation { metadata: other } = state {
                     let _ = permit
                         .send(super::task::OperationPermit::OperationAlreadyInProgress { other });
                     return;
                 };
 
-                TaskState::WaitingForPermit {
+                TaskState::WaitingToStartOperation {
                     metadata,
                     permit,
                     blocked_locks: Vec::new(),
@@ -231,14 +248,14 @@ impl Controller {
                 }
             }
             TaskEvent::OperationFinished => {
-                let TaskState::InsideOperation { .. } = state else {
+                let TaskState::ExecutingOperation { .. } = state else {
                     panic!(
                         "task '{}': received OperationFinished when not inside operation",
                         task.name().0
                     );
                 };
 
-                TaskState::OutsideOperation
+                TaskState::ExecutingOutsideOperation
             }
             TaskEvent::TaskFinished => {
                 let locks = self.locked_state.acquired_locks(id);
