@@ -55,7 +55,7 @@ impl fmt::Debug for TaskState {
                 blocked_locks,
                 ..
             } => {
-                write!(f, "waiting-to-start-operation {metadata} (locks: {locks:?}, blocked-locks: {blocked_locks:?})")
+                write!(f, "waiting-to-start-operation {metadata} (locks: {locks:?}, blocked by locks: {blocked_locks:?})")
             }
             Self::ExecutingOperation { metadata } => {
                 write!(f, "executing-operation {metadata}")
@@ -142,7 +142,7 @@ impl Controller {
                     .iter()
                     .map(|(task, state)| format!("task '{}': {state:?}", task.name().0))
                     .collect::<Vec<_>>();
-                panic!("timed out, tasks: {tasks:?}");
+                panic!("timed out, tasks: {tasks:#?}");
             }
         }
     }
@@ -183,44 +183,22 @@ impl Controller {
     }
 
     pub(crate) fn assert_finished(&self) {
-        if self
+        let unfinished = self
             .tasks
             .iter()
-            .all(|(_, state)| matches!(state, TaskState::Finished))
-        {
-            return;
-        }
-
-        let in_progress_tasks = self
-            .tasks
-            .iter()
-            .filter_map(|(task, state)| match state {
-                TaskState::ExecutingOperation { metadata } => Some(format!(
-                    "task '{}' in operation '{}'",
-                    task.name().0,
-                    metadata.name
-                )),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let blocked_tasks = self
-            .tasks
-            .iter()
-            .filter_map(|(task, state)| match state {
-                TaskState::WaitingToStartOperation {
-                    metadata,
-                    blocked_locks,
-                    ..
-                } if !blocked_locks.is_empty() => Some(format!(
-                    "task '{}' in operation '{}' - blocked by locks",
-                    task.name().0,
-                    metadata.name
-                )),
-                _ => None,
+            .filter_map(|(task, state)| {
+                if matches!(state, TaskState::Finished) {
+                    None
+                } else {
+                    Some(format!("task '{}': {state:?}", task.name().0))
+                }
             })
             .collect::<Vec<_>>();
 
-        panic!("some tasks did not finish. in progress tasks: {in_progress_tasks:?}, blocked tasks: {blocked_tasks:?}");
+        assert!(
+            unfinished.is_empty(),
+            "some tasks did not finish: {unfinished:#?}"
+        );
     }
 
     async fn recv_event(&mut self) {
